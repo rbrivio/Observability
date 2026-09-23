@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.cm as cm
 
-observatories = {'La Silla': 'lasilla', 'Paranal': 'paranal', 'La Palma': 'lapalma', 'LBT': 'lbt', 'Gemini-North': 'Gemini North', 'Gemini-South': 'Gemini South', 'Cerro Tololo':'lco'}
+observatories = {'La Silla': 'lasilla', 'Paranal': 'paranal', 'La Palma': 'lapalma', 'Mt. Graham': 'lbt', 'Mauna Kea': 'Gemini North', 'Cerro Pachon': 'Gemini South', 'Cerro Tololo':'lco'}
 custom_sites = {'LBT': Observer(
             location=EarthLocation(
             lat=32.7013*u.deg,
@@ -94,8 +94,8 @@ def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='tod
     end_time = Time(date) + 12*u.hour
     times = start_time + np.linspace(0, 24, 300) * u.hour
 
-    if not site in ('La Silla', 'Paranal', 'La Palma', 'LCO', 'Gemini-North', 'Gemini-South', 'LBT'):
-        raise ValueError("Invalid site provided. Admitted values: 'LaSilla', 'Paranal', 'LaPalma', 'LCO', 'Gemini-North', 'Gemini-South', 'LBT'")
+    if not site in ('La Silla', 'Paranal', 'La Palma', 'Mt. Graham', 'Mauna Kea', 'Cerro Pachon', 'Cerro Tololo'):
+        raise ValueError("Invalid site provided. Admitted values: 'LaSilla', 'Paranal', 'LaPalma', 'Mt. Graham', 'Cerro Tololo', 'Mauna Kea', 'Cerro Pachon'")
 
     if site in custom_sites:
         observer = custom_sites[site]

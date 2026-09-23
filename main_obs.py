@@ -32,7 +32,7 @@ class MainWindow(QWidget):
         self.text_date.setDisplayFormat("yyyy-MM-dd")
         self.text_date.setDate(QDate.currentDate())
         self.text_site = QComboBox()
-        self.text_site.addItems(["La Silla", "Paranal", "La Palma", "LBT", "Cerro Tololo", "Gemini-North", "Gemini-South"])
+        self.text_site.addItems(["La Silla", "Paranal", "La Palma", "Mt. Graham", "Cerro Tololo", "Mauna Kea", "Cerro Pachon"])
 
         self.text_ra.setMaximumWidth(160)
         self.text_dec.setMaximumWidth(160)
