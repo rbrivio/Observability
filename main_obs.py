@@ -6,23 +6,38 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtCore import Qt, QDate, QRegExp
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QDateEdit, QFormLayout, QLineEdit,
-    QDialog, QFileDialog, QComboBox, QTextEdit, QMessageBox)
-from PyQt5.QtGui import QFont, QIcon, QRegExpValidator
+    QApplication, QWidget, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QDateEdit, QFormLayout, QLineEdit,
+    QDialog, QFileDialog, QComboBox, QTextEdit, QMessageBox, QAction)
+from PyQt5.QtGui import QFont, QIcon, QRegExpValidator, QKeySequence, QColor, QPalette
+import astropy.units as u
+from astroplan import AtNightConstraint, AltitudeConstraint, MoonSeparationConstraint, AirmassConstraint, MoonIlluminationConstraint
 import funcs_obs as fo
 import warnings
 warnings.filterwarnings("ignore")
 
+def apply_theme(app):
+    app.setStyle("Fusion")
+    pal = QPalette()
+    pal.setColor(QPalette.Window, Qt.white)
+    pal.setColor(QPalette.WindowText, QColor(30, 34, 45))
+    pal.setColor(QPalette.Base, Qt.white)
+    pal.setColor(QPalette.Text, QColor(20, 23, 31))
+    pal.setColor(QPalette.Button, Qt.white)
+    pal.setColor(QPalette.ButtonText, QColor(45, 50, 65)) 
+    app.setPalette(pal)
 
-class MainWindow(QWidget):
+class MainWindow(QMainWindow): #QWidget
     def __init__(self):
         super().__init__()
-        #self.setWindowIcon(QIcon("logo_app.icns"))
+        central = QWidget()
+        self.setCentralWidget(central)
         self.setWindowTitle("Observability")
         self.resize(1200, 600)
 
+        #self.setStyleSheet("""QMainWindow, QWidget { background-color: white; } QLineEdit { background: black; }""")
+
         # Main layout
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(central)
 
         # Data
         self.text_ra = QLineEdit() #QTextEdit()
@@ -34,10 +49,19 @@ class MainWindow(QWidget):
         self.text_site = QComboBox()
         self.text_site.addItems(["La Silla", "Paranal", "La Palma", "Mt. Graham", "Cerro Tololo", "Mauna Kea", "Cerro Pachon"])
 
-        self.text_ra.setMaximumWidth(160)
-        self.text_dec.setMaximumWidth(160)
-        self.text_date.setMaximumWidth(160)
-        self.text_site.setMaximumWidth(160)
+        # Constraints
+        self.max_airmass = QLineEdit("2.9")
+        self.max_li = QLineEdit("1.0")
+        self.max_md = QLineEdit("30")
+
+        self.text_ra.setMaximumWidth(100)
+        self.text_dec.setMaximumWidth(100)
+        self.text_date.setMaximumWidth(130)
+        self.text_site.setMaximumWidth(130)
+
+        self.max_airmass.setMaximumWidth(40)
+        self.max_li.setMaximumWidth(40)
+        self.max_md.setMaximumWidth(40)
 
         regex = QRegExp(r"[+-]?\d{1,2}:\d{2}:\d{2}(\.\d+)?")
         self.text_ra.setValidator(QRegExpValidator(regex))
@@ -62,18 +86,24 @@ class MainWindow(QWidget):
         self.canvas = FigureCanvas(self.figure)
         
         # Layouts
+        left_layout = QHBoxLayout()
+        left_layout.setSpacing(10)
         form_left = QFormLayout()
         form_left.addRow("RA:", self.text_ra)
         form_left.addRow("Dec:", self.text_dec)
+        form_central = QFormLayout()
+        form_central.addRow("Site:", self.text_site)
+        form_central.addRow("Date:", self.text_date)
         form_right = QFormLayout()
-        form_right.addRow("Site:", self.text_site)
-        form_right.addRow("Date:", self.text_date)
-        left_layout = QHBoxLayout()
+        form_right.addRow("Airmass:", self.max_airmass)
+        form_right.addRow("Moon distance:", self.max_md)
+        form_right.addRow("Lunar illumination:", self.max_li)
         left_layout.addLayout(form_left)
+        left_layout.addLayout(form_central)
         left_layout.addLayout(form_right)
 
         right_layout = QHBoxLayout()
-        right_layout.addWidget(self.btn_file)
+        #right_layout.addWidget(self.btn_file)
         right_layout.addWidget(self.btn_plot)
         right_layout.addWidget(self.btn_clear)
 
@@ -89,7 +119,18 @@ class MainWindow(QWidget):
 
         # Variables
         self.selected_file = None
+        self._build_menu_and_shortcuts()
 
+    def _build_menu_and_shortcuts(self):
+        m = self.menuBar().addMenu("File")
+        for text, key, slot in (
+            ("Load file", "Ctrl+O", self.open_file),
+            ("Save plot", "Ctrl+S", self.save_plot),
+        ):
+            a = QAction(text, self)
+            a.setShortcut(QKeySequence(key))
+            a.triggered.connect(slot)
+            m.addAction(a)
 
     def style_button(self, button, color, size=[210, 50],fontsize=14):
         button.setFixedSize(size[0], size[1])
@@ -125,6 +166,12 @@ class MainWindow(QWidget):
             print(f"Selected file: {file_name}")
         else:
             return
+    
+    def save_plot(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save plot", "observability.png", "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)")
+        if not path:
+            return
+        self.ax.figure.savefig(path, dpi=200, bbox_inches='tight')
 
     def clear_imports(self):
         self.selected_file = None
@@ -137,21 +184,33 @@ class MainWindow(QWidget):
         if not gid:
             return
 
-        target_line = None
-        for line in self.ax.get_lines():
-            if line.get_gid() == gid:
-                target_line = line
-                break
-        
-        if target_line is None:
+        if event.mouseevent is getattr(self, '_last_mouse_event', None):
+            return
+        self._last_mouse_event = event.mouseevent
+        group = self.moon_degs.get(gid, []) #[ln for ln in self.ax.get_lines() if ln.get_gid() == gid]
+        if not group:
             return
 
         # Hide/show toggle on every lines with the same gid
-        new_visible = not target_line.get_visible()
-        target_line.set_visible(new_visible)
-        # for line in ax.get_lines():
+        new_visible = not group[0].get_visible()
+        for art in group:
+            art.set_visible(new_visible)
+
+        # target_line = None
+        # for line in self.ax.get_lines():
         #     if line.get_gid() == gid:
-        #         line.set_visible(not line.get_visible())
+        #         target_line = line
+        #         break
+        
+        # if target_line is None:
+        #     return
+
+        # 
+        # new_visible = not target_line.get_visible()
+        # target_line.set_visible(new_visible)
+        # # for line in ax.get_lines():
+        # #     if line.get_gid() == gid:
+        # #         line.set_visible(not line.get_visible())
 
         for md in self.moon_degs.get(gid, []):
             md.set_visible(new_visible)
@@ -204,7 +263,11 @@ class MainWindow(QWidget):
             date_str = 'today'
 
         try:
-            self.moon_degs = fo.plot_observability(self.ax,site,ra,dec, date=date_str,target_names=target_names)
+            constraints = [AtNightConstraint.twilight_astronomical(), AltitudeConstraint(min=20*u.deg), 
+                        MoonSeparationConstraint(min=float(self.max_md.text())*u.deg), AirmassConstraint(max=float(self.max_airmass.text()), min=1.0, boolean_constraint=True),
+                        MoonIlluminationConstraint(max=float(self.max_li.text()))]
+            
+            self.moon_degs = fo.plot_observability(self.ax,site,ra,dec, date=date_str,target_names=target_names, constraints=constraints)
             self.cid_pick = self.canvas.mpl_connect("pick_event", self.on_pick)
 
             legend = self.ax.get_legend()
@@ -216,12 +279,15 @@ class MainWindow(QWidget):
 
         except Exception as e:
             QMessageBox.warning(self,"Exception", f"Error in plotting: {e}")
+            return
 
         self.canvas.draw_idle()
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_theme(app)
+    app.setWindowIcon(QIcon("obs_logo.png"))
     win = MainWindow()
     win.show()
     sys.exit(app.exec_())

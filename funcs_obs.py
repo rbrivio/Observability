@@ -1,4 +1,4 @@
-from astroplan import Observer, FixedTarget
+from astroplan import Observer, FixedTarget, AltitudeConstraint, AtNightConstraint, MoonSeparationConstraint
 from astroplan.plots import plot_altitude
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, get_sun, get_moon, EarthLocation
@@ -40,6 +40,33 @@ def airmass(elev_deg):
     elev_deg = np.clip(elev_deg, 0.1, 90)
     return 1 / (np.sin(np.radians(elev_deg)) + 0.50572 * (elev_deg + 6.07995)**-1.6364)
 
+def constraint_array(constraints, observer, targets, times=None, time_range=None, time_grid_resolution=300*u.second): # time grid defined to be 5 min
+    """
+    Function to compute the constraint array based on observational constraints like airmass, moon separation, etc.
+    observer: the telescope observer location, targets: the targets to be observed, times: the times at which the constraints are evaluated
+    time_range: the range of times to consider for the constraints, time_grid_resolution: the time steps between observations, defaul 5minutes
+    """
+
+    # Adjust time_range if it is a scalar
+    if hasattr(time_range, 'isscalar') and time_range.isscalar:
+        time_range = (time_range-12*u.hour, time_range+12*u.hour) # 24h window centered around time_range +/- 12 h
+
+    # Apply all constraints to observer and targets, to create boolean arrays
+    applied_constraints = [constraint(observer, targets, times=times, time_range=time_range,
+                                      time_grid_resolution=time_grid_resolution, grid_times_targets=True)
+                           for constraint in constraints]
+
+    # Combine all constraints in a single boolean array using logical AND operation
+    constraint_arr = np.logical_and.reduce(applied_constraints)
+
+    # If times are not provided, generate a time grid based on the given range
+    if times is None and time_range is not None:
+        times = time_grid_from_range(time_range, time_resolution=time_grid_resolution)
+
+    obs_array = [1 if constraint_arr[0][index] else 0 for index in range(len(constraint_arr[0]))]
+
+    return np.array(obs_array, dtype=bool)
+
 def do_plot (ax,xlbl="",ylbl="",title="",ylbl_right="",linwidth=2,tickxfonsiz=15,tickyfonsiz=15,xlblfonsiz=20,ylblfonsiz=20,titlefonsiz=25,titlepad=20,right=False,top=False):
     # Lines
     [i.set_linewidth(linwidth) for i in ax.spines.values()]
@@ -55,7 +82,7 @@ def do_plot (ax,xlbl="",ylbl="",title="",ylbl_right="",linwidth=2,tickxfonsiz=15
     ax.set_ylabel(ylbl,fontsize=ylblfonsiz)
     ax.set_title(title,fontsize=titlefonsiz,pad=titlepad)
 
-def plot_source(ax, ra_input,dec_input, observer, times, moon_altaz, target_name, color):
+def plot_source(ax, ra_input,dec_input, observer, times, moon_altaz, target_name, color, constraints=None):
     
     # Prepare quantities for plot
     target_coord = coords_conv(ra_input, dec_input)
@@ -67,21 +94,42 @@ def plot_source(ax, ra_input,dec_input, observer, times, moon_altaz, target_name
 
     plot_altitude(target, observer, times, ax=ax, style_kwargs={'color':color,'linewidth':3,'linestyle':'-','marker':''})
 
-    moon_degs = []
-    for t,md,alt in zip(times[::25],moon_distance[::25],altitudes[::25]):
-        ann = ax.annotate(f"{md:.1f}°", (t.datetime, alt.to_value(u.deg)), textcoords="offset points", xytext=(0,15), ha="center", fontsize=10, c=color)
-        moon_degs.append(ann)
-    #ax.annotate(f"{target_name}", (times[0].datetime,altitudes[0].to_value(u.deg)), textcoords="offset points", xytext=(0,15), ha="center", fontsize=10, c='green')
-    
     line = ax.get_lines()[-1]
     line.set_picker(5)
     line.set_zorder(10)
     line.set_gid(target_name)
+    artists = [line]
 
-    return moon_degs
+    if constraints:
+        cons_arr = constraint_array(constraints, observer, [target], times=times)
+        # Dim the base line, so the observable part stands out
+        line.set_alpha(0.35)
 
-def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='today'):
-    
+        alt_deg = altitudes.to_value(u.deg)
+        overlay, = ax.plot(times.datetime, np.where(cons_arr, alt_deg, np.nan), color=color, linewidth=5, linestyle='-', zorder=11, solid_capstyle='butt')
+        overlay.set_gid(target_name)
+        overlay.set_picker(5)
+        artists.append(overlay)
+
+        d = np.diff(cons_arr.astype(int))
+        idx = np.flatnonzero(d)
+        edges = idx + (d[idx] == 1)
+        for i in edges:
+            mk, = ax.plot(times[i].datetime, alt_deg[i], marker='|', color='k', ms=14, mew=2, zorder=12)
+            mk.set_gid(target_name)
+            artists.append(mk)
+
+    moon_anns = []
+    for t,md,alt in zip(times[::25],moon_distance[::25],altitudes[::25]):
+        ann = ax.annotate(f"{md:.1f}°", (t.datetime, alt.to_value(u.deg)), textcoords="offset points", xytext=(0,15), ha="center", fontsize=10, c=color)
+        moon_anns.append(ann)
+    #ax.annotate(f"{target_name}", (times[0].datetime,altitudes[0].to_value(u.deg)), textcoords="offset points", xytext=(0,15), ha="center", fontsize=10, c='green')
+    artists.extend(moon_anns)
+
+    return artists
+
+def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='today', constraints=None):
+
     colors = cm.tab10(np.linspace(0, 1, len(ra_input)))
     if date == 'today':
         date = Time.now().to_value('iso', subfmt='date')
@@ -160,7 +208,7 @@ def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='tod
     # Plot altitude vs. time
     moon_degs = {}
     for ra,dec,target_name,color in zip(ra_input,dec_input,target_names,colors):
-        annotations = plot_source(ax, ra,dec, observer, times, moon_altaz, target_name,color)
+        annotations = plot_source(ax, ra,dec, observer, times, moon_altaz, target_name,color, constraints=constraints)
         moon_degs[target_name] = annotations
 
     plot_altitude(moon_target, observer, times, ax=ax, style_kwargs={'color':'blue','linewidth':1.5,'linestyle':'--','marker':''})
