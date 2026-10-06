@@ -7,7 +7,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtCore import Qt, QDate, QRegExp
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QDateEdit, QFormLayout, QLineEdit,
-    QDialog, QFileDialog, QComboBox, QTextEdit, QMessageBox, QAction)
+    QDialog, QFileDialog, QComboBox, QTextEdit, QMessageBox, QAction, QGridLayout, QLabel, QDoubleSpinBox)
 from PyQt5.QtGui import QFont, QIcon, QRegExpValidator, QKeySequence, QColor, QPalette
 import astropy.units as u
 from astroplan import AtNightConstraint, AltitudeConstraint, MoonSeparationConstraint, AirmassConstraint, MoonIlluminationConstraint
@@ -33,15 +33,18 @@ class MainWindow(QMainWindow): #QWidget
         self.setCentralWidget(central)
         self.setWindowTitle("Observability")
         self.resize(1200, 600)
+        self.setMinimumSize(900, 550)
 
         #self.setStyleSheet("""QMainWindow, QWidget { background-color: white; } QLineEdit { background: black; }""")
 
         # Main layout
         layout = QVBoxLayout(central)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(10)
 
         # Data
-        self.text_ra = QLineEdit() #QTextEdit()
-        self.text_dec = QLineEdit() 
+        self.text_ra = QLineEdit()
+        self.text_dec = QLineEdit()
         self.text_date = QDateEdit()
         self.text_date.setCalendarPopup(True)
         self.text_date.setDisplayFormat("yyyy-MM-dd")
@@ -50,18 +53,29 @@ class MainWindow(QMainWindow): #QWidget
         self.text_site.addItems(["La Silla", "Paranal", "La Palma", "Mt. Graham", "Cerro Tololo", "Mauna Kea", "Cerro Pachon"])
 
         # Constraints
-        self.max_airmass = QLineEdit("2.9")
-        self.max_li = QLineEdit("1.0")
-        self.max_md = QLineEdit("30")
+        self.max_airmass = QDoubleSpinBox()
+        self.max_airmass.setRange(1.0, 5.0)
+        self.max_airmass.setSingleStep(0.1)
+        self.max_airmass.setValue(2.9)
 
-        self.text_ra.setMaximumWidth(100)
-        self.text_dec.setMaximumWidth(100)
-        self.text_date.setMaximumWidth(130)
-        self.text_site.setMaximumWidth(130)
+        self.max_md = QDoubleSpinBox()
+        self.max_md.setRange(0, 180)
+        self.max_md.setSingleStep(1)
+        self.max_md.setSuffix(" °")
+        self.max_md.setValue(30)
 
-        self.max_airmass.setMaximumWidth(40)
-        self.max_li.setMaximumWidth(40)
-        self.max_md.setMaximumWidth(40)
+        self.max_li = QDoubleSpinBox()
+        self.max_li.setRange(0, 1)
+        self.max_li.setSingleStep(0.05)
+        self.max_li.setValue(1.0)
+
+        for w in (self.text_ra, self.text_dec):
+            w.setFixedWidth(100)
+        for w in (self.text_site, self.text_date):
+            w.setFixedWidth(130)
+        for w in (self.max_airmass, self.max_md, self.max_li):
+            w.setFixedWidth(80)
+            w.setKeyboardTracking(True)
 
         regex = QRegExp(r"[+-]?\d{1,2}:\d{2}:\d{2}(\.\d+)?")
         self.text_ra.setValidator(QRegExpValidator(regex))
@@ -72,12 +86,14 @@ class MainWindow(QMainWindow): #QWidget
         self.style_button(self.btn_file, "#3498db", size=[220, 50])
         self.btn_file.clicked.connect(self.open_file)
 
-        self.btn_plot = QPushButton("Plot observability!")
+        self.btn_plot = QPushButton("Plot observability")
         self.style_button(self.btn_plot, "orange", size=[240, 50],fontsize=20)
         self.btn_plot.clicked.connect(self.generate_plot)
+        self.btn_plot.setDefault(True)
+        self.btn_plot.setShortcut("Ctrl+Return")
 
         self.btn_clear = QPushButton("Clear")
-        self.style_button(self.btn_clear, "#e14c3c", size=[80,30],fontsize=12)
+        self.style_button(self.btn_clear, "#e14c3c", size=[80,30],fontsize=12, border_px=1)
         self.btn_clear.clicked.connect(self.clear_imports)
 
         # Plot area
@@ -87,33 +103,43 @@ class MainWindow(QMainWindow): #QWidget
         
         # Layouts
         left_layout = QHBoxLayout()
-        left_layout.setSpacing(10)
-        form_left = QFormLayout()
-        form_left.addRow("RA:", self.text_ra)
-        form_left.addRow("Dec:", self.text_dec)
-        form_central = QFormLayout()
-        form_central.addRow("Site:", self.text_site)
-        form_central.addRow("Date:", self.text_date)
-        form_right = QFormLayout()
-        form_right.addRow("Airmass:", self.max_airmass)
-        form_right.addRow("Moon distance:", self.max_md)
-        form_right.addRow("Lunar illumination:", self.max_li)
-        left_layout.addLayout(form_left)
-        left_layout.addLayout(form_central)
-        left_layout.addLayout(form_right)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(8)
+        grid.setColumnMinimumWidth(2, 24)
+        grid.setColumnMinimumWidth(5, 24)
+        self._add_in_grid(0, 0, "RA:", self.text_ra, grid);          self._add_in_grid(0, 3, "Site:", self.text_site, grid);    self._add_in_grid(0, 6, "Max airmass:", self.max_airmass, grid)
+        self._add_in_grid(1, 0, "Dec:", self.text_dec, grid);        self._add_in_grid(1, 3, "Date:", self.text_date, grid);    self._add_in_grid(1, 6, "Min moon distance:", self.max_md, grid)
+        self._add_in_grid(2, 6, "Max lunar illumination:", self.max_li, grid)
+        grid.setColumnStretch(9, 1)
+        self.text_ra.setPlaceholderText("hh:mm:ss")
+        self.text_dec.setPlaceholderText("dd:mm:ss")
+        self.max_md.setToolTip("[deg]")
+        self.max_li.setToolTip("0 (new) to 1 (full)")
+        left_layout.addLayout(grid)
 
-        right_layout = QHBoxLayout()
+        right_layout = QVBoxLayout()
         #right_layout.addWidget(self.btn_file)
-        right_layout.addWidget(self.btn_plot)
-        right_layout.addWidget(self.btn_clear)
+        right_layout.addWidget(self.btn_plot, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        right_layout.addWidget(self.btn_clear, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
         upper_layout = QHBoxLayout()
+        upper_layout.setSpacing(24)
         upper_layout.addStretch()
         upper_layout.addLayout(left_layout)
         upper_layout.addLayout(right_layout)
         upper_layout.addStretch()
         layout.addLayout(upper_layout, 2)
         layout.addWidget(self.canvas, 8)
+
+        QWidget.setTabOrder(self.text_ra, self.text_dec)
+        QWidget.setTabOrder(self.text_dec, self.text_site)
+        QWidget.setTabOrder(self.text_site, self.text_date)
+        QWidget.setTabOrder(self.text_date, self.max_airmass)
+        QWidget.setTabOrder(self.max_airmass, self.max_md)
+        QWidget.setTabOrder(self.max_md, self.max_li)
+        QWidget.setTabOrder(self.max_li, self.btn_plot)
+        QWidget.setTabOrder(self.btn_plot, self.btn_clear)
 
         self.setLayout(layout)
 
@@ -132,7 +158,7 @@ class MainWindow(QMainWindow): #QWidget
             a.triggered.connect(slot)
             m.addAction(a)
 
-    def style_button(self, button, color, size=[210, 50],fontsize=14):
+    def style_button(self, button, color, size=[210, 50],fontsize=14, border_px=2):
         button.setFixedSize(size[0], size[1])
         button.setFont(QFont("Verdana", fontsize)) #, QFont.Bold
         button.setStyleSheet(f"""
@@ -140,7 +166,7 @@ class MainWindow(QMainWindow): #QWidget
                 background-color: {color};
                 color: white;
                 border-radius: 12px;
-                border: 2px solid dark{color[1:]};
+                border: {int(border_px)}px solid dark{color[1:]};
             }}
             QPushButton:hover {{
                 background-color: dark{color[1:]};
@@ -158,6 +184,11 @@ class MainWindow(QMainWindow): #QWidget
                 border-radius: 6px;
             }
         """)
+
+    def _add_in_grid(self, row, col, text, widget, grid):
+        lbl = QLabel(text)
+        grid.addWidget(lbl, row, col, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        grid.addWidget(widget, row, col + 1)
 
     def open_file(self):
         file_name, _ = QFileDialog.getOpenFileName(self, "Choose data file", "", "Data Files (*.csv *.txt *.dat);;All Files (*)")
@@ -264,9 +295,9 @@ class MainWindow(QMainWindow): #QWidget
 
         try:
             constraints = [AtNightConstraint.twilight_astronomical(), AltitudeConstraint(min=20*u.deg), 
-                        MoonSeparationConstraint(min=float(self.max_md.text())*u.deg), AirmassConstraint(max=float(self.max_airmass.text()), min=1.0, boolean_constraint=True),
-                        MoonIlluminationConstraint(max=float(self.max_li.text()))]
-            
+                        MoonSeparationConstraint(min=float(self.max_md.value())*u.deg), AirmassConstraint(max=float(self.max_airmass.value()), min=1.0, boolean_constraint=True),
+                        MoonIlluminationConstraint(max=float(self.max_li.value()))]
+
             self.moon_degs = fo.plot_observability(self.ax,site,ra,dec, date=date_str,target_names=target_names, constraints=constraints)
             self.cid_pick = self.canvas.mpl_connect("pick_event", self.on_pick)
 
