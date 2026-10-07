@@ -184,9 +184,15 @@ def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='tod
 
     # Add vertical lines for sunset and sunrise
     for time, color, label in zip([sunset, sunrise], ['orangered','orange'], ['Sunset', 'Sunrise']):
-        ax.axvline(time.datetime, color=color, linestyle='--')
-        ax.annotate(f"{time.ymdhms[3]}:{time.ymdhms[4]}", (time.datetime+timedelta(minutes=12),75), ha="center", fontsize='medium', c=color, rotation=90)
-        ax.annotate(label, (time.datetime+timedelta(minutes=12),1.02), va="bottom", xycoords=("data", "axes fraction"), ha="center", fontsize='medium', c=color, rotation=0)
+        x = time.datetime
+        tr = ax.get_xaxis_transform() 
+        ax.plot([x], [1.0], marker='v', ms=11, color=color, mec='white', mew=1, transform=tr,clip_on=False, zorder=20)
+        ax.plot([x], [0.01], marker='^', ms=11, color=color, mec='white', mew=1, transform=tr,clip_on=False, zorder=20)
+        ax.annotate(f"{time.ymdhms[3]}:{time.ymdhms[4]}", (time.datetime+timedelta(minutes=6),74), ha="center", 
+fontsize='medium', c=color, rotation=90)
+        ax.annotate(label, (time.datetime+timedelta(minutes=6),1.02), va="bottom", xycoords=("data", "axes fraction"), 
+ha="center", fontsize='medium', c=color, rotation=0)
+        #ax.fill_between(time.datetime, 0, 90, color='#ffd27f', alpha=0.25, lw=0, zorder=0)
 
     # Ensure evening and morning are ok
     astro_start = safe_time(observer.twilight_evening_astronomical(sunset, which='nearest'))

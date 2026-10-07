@@ -295,7 +295,8 @@ class MainWindow(QMainWindow): #QWidget
 
         try:
             constraints = [AtNightConstraint.twilight_astronomical(), AltitudeConstraint(min=20*u.deg), 
-                        MoonSeparationConstraint(min=float(self.max_md.value())*u.deg), AirmassConstraint(max=float(self.max_airmass.value()), min=1.0, boolean_constraint=True),
+                        MoonSeparationConstraint(min=float(self.max_md.value())*u.deg), 
+AirmassConstraint(max=float(self.max_airmass.value()), min=1.0024, boolean_constraint=True),
                         MoonIlluminationConstraint(max=float(self.max_li.value()))]
 
             self.moon_degs = fo.plot_observability(self.ax,site,ra,dec, date=date_str,target_names=target_names, constraints=constraints)
