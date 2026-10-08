@@ -58,11 +58,11 @@ class MainWindow(QMainWindow): #QWidget
         self.max_airmass.setSingleStep(0.1)
         self.max_airmass.setValue(2.9)
 
-        self.max_md = QDoubleSpinBox()
-        self.max_md.setRange(0, 180)
-        self.max_md.setSingleStep(1)
-        self.max_md.setSuffix(" °")
-        self.max_md.setValue(30)
+        self.min_md = QDoubleSpinBox()
+        self.min_md.setRange(0, 180)
+        self.min_md.setSingleStep(1)
+        self.min_md.setSuffix(" °")
+        self.min_md.setValue(30)
 
         self.max_li = QDoubleSpinBox()
         self.max_li.setRange(0, 1)
@@ -73,7 +73,7 @@ class MainWindow(QMainWindow): #QWidget
             w.setFixedWidth(100)
         for w in (self.text_site, self.text_date):
             w.setFixedWidth(130)
-        for w in (self.max_airmass, self.max_md, self.max_li):
+        for w in (self.max_airmass, self.min_md, self.max_li):
             w.setFixedWidth(80)
             w.setKeyboardTracking(True)
 
@@ -109,12 +109,12 @@ class MainWindow(QMainWindow): #QWidget
         grid.setColumnMinimumWidth(2, 24)
         grid.setColumnMinimumWidth(5, 24)
         self._add_in_grid(0, 0, "RA:", self.text_ra, grid);          self._add_in_grid(0, 3, "Site:", self.text_site, grid);    self._add_in_grid(0, 6, "Max airmass:", self.max_airmass, grid)
-        self._add_in_grid(1, 0, "Dec:", self.text_dec, grid);        self._add_in_grid(1, 3, "Date:", self.text_date, grid);    self._add_in_grid(1, 6, "Min moon distance:", self.max_md, grid)
+        self._add_in_grid(1, 0, "Dec:", self.text_dec, grid);        self._add_in_grid(1, 3, "Date:", self.text_date, grid);    self._add_in_grid(1, 6, "Min moon distance:", self.min_md, grid)
         self._add_in_grid(2, 6, "Max lunar illumination:", self.max_li, grid)
         grid.setColumnStretch(9, 1)
         self.text_ra.setPlaceholderText("hh:mm:ss")
         self.text_dec.setPlaceholderText("dd:mm:ss")
-        self.max_md.setToolTip("[deg]")
+        self.min_md.setToolTip("[deg]")
         self.max_li.setToolTip("0 (new) to 1 (full)")
         left_layout.addLayout(grid)
 
@@ -136,8 +136,8 @@ class MainWindow(QMainWindow): #QWidget
         QWidget.setTabOrder(self.text_dec, self.text_site)
         QWidget.setTabOrder(self.text_site, self.text_date)
         QWidget.setTabOrder(self.text_date, self.max_airmass)
-        QWidget.setTabOrder(self.max_airmass, self.max_md)
-        QWidget.setTabOrder(self.max_md, self.max_li)
+        QWidget.setTabOrder(self.max_airmass, self.min_md)
+        QWidget.setTabOrder(self.min_md, self.max_li)
         QWidget.setTabOrder(self.max_li, self.btn_plot)
         QWidget.setTabOrder(self.btn_plot, self.btn_clear)
 
@@ -295,8 +295,8 @@ class MainWindow(QMainWindow): #QWidget
 
         try:
             constraints = [AtNightConstraint.twilight_astronomical(), AltitudeConstraint(min=20*u.deg), 
-                        MoonSeparationConstraint(min=float(self.max_md.value())*u.deg), 
-AirmassConstraint(max=float(self.max_airmass.value()), min=1.0024, boolean_constraint=True),
+                        MoonSeparationConstraint(min=float(self.min_md.value())*u.deg), 
+                        AirmassConstraint(max=float(self.max_airmass.value()), min=1.0024, boolean_constraint=True),
                         MoonIlluminationConstraint(max=float(self.max_li.value()))]
 
             self.moon_degs = fo.plot_observability(self.ax,site,ra,dec, date=date_str,target_names=target_names, constraints=constraints)

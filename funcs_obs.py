@@ -36,6 +36,17 @@ def coords_conv(ra_input, dec_input):
 
     return coord
 
+def get_evening_morning(telescope):
+    now = Time.now()
+    morning = telescope.twilight_morning_astronomical(now).iso
+    evening = telescope.twilight_evening_astronomical(now, which = 'next').iso
+    if morning<now<evening:
+        morning = telescope.twilight_morning_astronomical(now, which = 'next').iso
+    else:
+        evening = telescope.twilight_evening_astronomical(now).iso
+
+    return Time(evening), Time(morning)
+
 def airmass(elev_deg):
     elev_deg = np.clip(elev_deg, 0.1, 90)
     return 1 / (np.sin(np.radians(elev_deg)) + 0.50572 * (elev_deg + 6.07995)**-1.6364)
@@ -129,10 +140,19 @@ def plot_source(ax, ra_input,dec_input, observer, times, moon_altaz, target_name
     return artists
 
 def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='today', constraints=None):
+    
+    if not site in ('La Silla', 'Paranal', 'La Palma', 'Mt. Graham', 'Mauna Kea', 'Cerro Pachon', 'Cerro Tololo'):
+        raise ValueError("Invalid site provided. Admitted values: 'LaSilla', 'Paranal', 'LaPalma', 'Mt. Graham', 'Cerro Tololo', 'Mauna Kea', 'Cerro Pachon'")
 
+    if site in custom_sites:
+        observer = custom_sites[site]
+    else:
+        observer = Observer.at_site(observatories[site])
+    
     colors = cm.tab10(np.linspace(0, 1, len(ra_input)))
-    if date == 'today':
-        date = Time.now().to_value('iso', subfmt='date')
+
+    evening, morning = get_evening_morning(observer)
+    date = evening.to_value('iso', subfmt='date')
 
     do_plot(ax,f'Time [UTC]','Altitude [deg]',f'Visibility on {date} (UTC) at {site}',titlefonsiz=22)
 
@@ -141,14 +161,6 @@ def plot_observability(ax, site, ra_input, dec_input, target_names=[], date='tod
     start_time = Time(date) - 12*u.hour
     end_time = Time(date) + 12*u.hour
     times = start_time + np.linspace(0, 24, 300) * u.hour
-
-    if not site in ('La Silla', 'Paranal', 'La Palma', 'Mt. Graham', 'Mauna Kea', 'Cerro Pachon', 'Cerro Tololo'):
-        raise ValueError("Invalid site provided. Admitted values: 'LaSilla', 'Paranal', 'LaPalma', 'Mt. Graham', 'Cerro Tololo', 'Mauna Kea', 'Cerro Pachon'")
-
-    if site in custom_sites:
-        observer = custom_sites[site]
-    else:
-        observer = Observer.at_site(observatories[site])
 
     # Compute sun coordinates
     sun_coords = get_sun(times)
