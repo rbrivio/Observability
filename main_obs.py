@@ -218,7 +218,7 @@ class MainWindow(QMainWindow): #QWidget
         if event.mouseevent is getattr(self, '_last_mouse_event', None):
             return
         self._last_mouse_event = event.mouseevent
-        group = self.moon_degs.get(gid, []) #[ln for ln in self.ax.get_lines() if ln.get_gid() == gid]
+        group = self.moon_degs.get(gid, [])
         if not group:
             return
 
@@ -226,22 +226,6 @@ class MainWindow(QMainWindow): #QWidget
         new_visible = not group[0].get_visible()
         for art in group:
             art.set_visible(new_visible)
-
-        # target_line = None
-        # for line in self.ax.get_lines():
-        #     if line.get_gid() == gid:
-        #         target_line = line
-        #         break
-        
-        # if target_line is None:
-        #     return
-
-        # 
-        # new_visible = not target_line.get_visible()
-        # target_line.set_visible(new_visible)
-        # # for line in ax.get_lines():
-        # #     if line.get_gid() == gid:
-        # #         line.set_visible(not line.get_visible())
 
         for md in self.moon_degs.get(gid, []):
             md.set_visible(new_visible)

@@ -1,6 +1,7 @@
 from astroplan import Observer, FixedTarget, AltitudeConstraint, AtNightConstraint, MoonSeparationConstraint
 from astroplan.plots import plot_altitude
 from astropy.time import Time
+from astroplan.utils import time_grid_from_range
 from astropy.coordinates import SkyCoord, get_sun, get_moon, EarthLocation
 import astropy.units as u
 from datetime import timedelta
@@ -8,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.cm as cm
+from matplotlib.axes import Axes
 
 observatories = {'La Silla': 'lasilla', 'Paranal': 'paranal', 'La Palma': 'lapalma', 'Mt. Graham': 'lbt', 'Mauna Kea': 'Gemini North', 'Cerro Pachon': 'Gemini South', 'Cerro Tololo':'lco'}
 custom_sites = {'LBT': Observer(
@@ -24,6 +26,17 @@ custom_sites = {'LBT': Observer(
             height=4213*u.m),
             name='Gemini North',
             timezone='US/Hawaii')}
+
+
+if not hasattr(Axes, "plot_date"):
+    def _plot_date(self, x, y, fmt="o", tz=None, xdate=True, ydate=False, **kwargs):
+        if xdate:
+            self.xaxis_date(tz)
+        if ydate:
+            self.yaxis_date(tz)
+        return self.plot(x, y, fmt, **kwargs)
+
+    Axes.plot_date = _plot_date
 
 def safe_time(t):
     return None if t.mask else t
