@@ -1,0 +1,11 @@
+name: observability
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - matplotlib
+  - astropy
+  - astroplan
+  - pyqt=5
